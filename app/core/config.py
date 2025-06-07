@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 15
 
+    # Default superuser password (for initial data seeding)
+    DEFAULT_SUPERUSER_PASSWORD: Optional[str] = None
+
     # Test database URL (optional)
     DATABASE_URL_TEST: Optional[str] = None # For dedicated test database
 
