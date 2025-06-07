@@ -1,18 +1,19 @@
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Set # Ensured Set is here
 
 from sqlmodel import select, func
 from app.core.config import settings
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.user import User # Ensures User is available for type hints
+from app.models.user import User
 from app.models.role import Role
-from app.models.associations import UserRole
+from app.models.permission import Permission # Ensured Permission
+from app.models.associations import UserRole, RolePermission # Ensured RolePermission
 from app.schemas.user import UserCreate, UserUpdate, UserRead
 from app.schemas.common import Page
-from app.core.security import get_password_hash # Needed for password reset
+from app.core.security import get_password_hash
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -127,7 +128,6 @@ class UserService:
 
     # --- Email Verification Methods ---
     async def _generate_secure_token(self, length: int = 32) -> str:
-        # This can be reused for password reset tokens as well
         return secrets.token_urlsafe(length)
 
     async def _send_verification_email(self, user: User, token: str):
@@ -203,9 +203,7 @@ class UserService:
     async def _send_password_reset_email(self, user: User, token: str):
         logger.info(f"Simulating sending password reset email to {user.email} for user {user.username}")
         logger.info(f"Password reset token: {token}")
-        # The link should point to a frontend URL that then calls our API with the token
-        # Example frontend link: f"http://yourfrontend.com/reset-password?token={token}"
-        logger.info(f"Password reset link for API testing (token part): .../reset-password/{token} (actual endpoint takes token in body or path)")
+        logger.info(f"Password reset link for API testing (token part): .../reset-password/{token}")
 
     async def request_password_reset(self, email: str, session: AsyncSession) -> tuple[bool, str]:
         logger.info(f"Request for password reset received for: {email}")
@@ -214,15 +212,7 @@ class UserService:
             logger.warning(f"Password reset request: User with email {email} not found.")
             return False, "USER_NOT_FOUND"
 
-        # Optionally, check if user is active or if email is verified before allowing password reset
-        # if not user.is_active:
-        #     logger.warning(f"Password reset request for inactive user: {email}")
-        #     return False, "USER_INACTIVE"
-        # if not user.is_email_verified: # Often, password reset is allowed for unverified emails too
-        #     logger.warning(f"Password reset request for unverified email: {email}")
-        #     return False, "EMAIL_NOT_VERIFIED"
-
-        token = await self._generate_secure_token() # Reusing the same token generator
+        token = await self._generate_secure_token()
         user.password_reset_token = token
         expire_hours = settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS
         user.password_reset_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
@@ -245,26 +235,47 @@ class UserService:
             logger.warning(f"Password reset failed: Invalid token (prefix {token[:10]}...).")
             return False
 
-        if user.password_reset_token != token: # Belt-and-suspenders
+        if user.password_reset_token != token:
             logger.warning(f"Password reset failed for user {user.username}: Token mismatch.")
             return False
 
         if user.password_reset_token_expires_at is None or \
            user.password_reset_token_expires_at < datetime.now(timezone.utc):
             logger.warning(f"Password reset failed for user {user.username}: Token expired.")
-            user.password_reset_token = None # Clear expired token
+            user.password_reset_token = None
             user.password_reset_token_expires_at = None
             session.add(user)
             await session.commit()
             return False
 
         user.hashed_password = get_password_hash(new_password)
-        user.password_reset_token = None # Clear token after successful reset
+        user.password_reset_token = None
         user.password_reset_token_expires_at = None
-        # Optionally, force re-login by invalidating sessions if using session management beyond JWTs
-        # Optionally, mark email as re-verified if password change implies control of email
-        # user.is_email_verified = True
         session.add(user)
         await session.commit()
         logger.info(f"Password successfully reset for user: {user.username}")
         return True
+
+    # --- Permission Methods ---
+    async def get_user_permission_names(self, user: User, session: AsyncSession) -> Set[str]:
+        """
+        Retrieves a set of all permission names for a given user through their roles.
+        """
+        logger.debug(f"Fetching permission names for user: {user.username} (ID: {user.id})")
+
+        # Efficiently fetch all permission names associated with the user's roles
+        # Query: User -> UserRole -> Role -> RolePermission -> Permission
+        stmt = (
+            select(Permission.name)
+            .join(RolePermission, Permission.id == RolePermission.permission_id)
+            .join(Role, RolePermission.role_id == Role.id)
+            .join(UserRole, Role.id == UserRole.role_id)
+            .where(UserRole.user_id == user.id)
+            .distinct()
+        )
+
+        permission_results = await session.exec(stmt)
+        permission_names: Set[str] = set(permission_results.all())
+
+        logger.debug(f"Permissions for {user.username}: {permission_names}")
+        return permission_names

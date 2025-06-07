@@ -5,6 +5,7 @@ from datetime import datetime # Ensure datetime is imported
 
 if TYPE_CHECKING:
     from .associations import UserRole
+    from .hr_models import Employee # Added import for Employee
 
 class User(SQLModel, table=True): # User model itself
     id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -28,3 +29,6 @@ class User(SQLModel, table=True): # User model itself
     hashed_password: str
 
     roles: List["UserRole"] = Relationship(back_populates="user")
+
+    # Link to HR Employee profile if this user is an employee
+    employee_profile: Optional["Employee"] = Relationship(back_populates="user")
