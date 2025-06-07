@@ -16,6 +16,7 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id: uuid.UUID
+    is_email_verified: bool = False # Default for schema, ORM value will override
     roles: Optional[List['RoleRead']] = [] # Add relationship, default to empty list
 
     class Config:

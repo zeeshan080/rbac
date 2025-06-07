@@ -1,4 +1,5 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict # Added SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional # Added Optional for DATABASE_URL_TEST
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FastAPI Project"
@@ -15,6 +16,16 @@ class Settings(BaseSettings):
 
     # Email verification settings
     EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24 # Default to 24 hours
+
+    # Password reset settings
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1 # Default to 1 hour
+
+    # Account lockout settings
+    MAX_FAILED_LOGIN_ATTEMPTS: int = 5
+    ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 15
+
+    # Test database URL (optional)
+    DATABASE_URL_TEST: Optional[str] = None # For dedicated test database
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra='ignore')
 

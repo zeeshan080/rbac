@@ -3,6 +3,7 @@ from .role import RoleBase, RoleCreate, RoleRead, RoleUpdate
 from .permission import PermissionBase, PermissionCreate, PermissionRead, PermissionUpdate
 from .associations import UserRoleLink, RolePermissionLink
 from .common import Page
+from .auth import PasswordResetRequestSchema, NewPasswordSchema # Added
 
 # Placeholder for item schemas if they were to be used
 # from .item import ItemBase, ItemCreate, ItemRead, ItemUpdate
