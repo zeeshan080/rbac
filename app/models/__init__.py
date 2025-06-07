@@ -1,6 +1,5 @@
-from .user import User, UserCreate, UserRead, UserUpdate
-from .role import Role, RoleCreate, RoleRead, RoleUpdate
-from .permission import Permission, PermissionCreate, PermissionRead, PermissionUpdate
+from .user import User
+from .role import Role
+from .permission import Permission
 from .associations import UserRole, RolePermission
-# We will remove Item later if not needed by RBAC
-# from .item import Item
+# from .item import Item # Item model is still there but not part of RBAC focus

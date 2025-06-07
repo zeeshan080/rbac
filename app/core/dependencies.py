@@ -4,17 +4,18 @@ import uuid # For converting user_id string to UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError # JWTError is already imported in security.py, but good for clarity
-from sqlmodel import Session, select # Using synchronous Session from SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession # Changed import
+from sqlmodel import select # select is still needed
 
 from app.core.security import decode_token, TokenPayload
 from app.models.user import User
-from app.database import get_db # Using existing synchronous get_db
+from app.database import get_session # Changed to get_session
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/access-token") # Assuming API prefix
 
-def get_current_user(
+async def get_current_user( # Made async
     token: Annotated[str, Depends(oauth2_scheme)],
-    session: Annotated[Session, Depends(get_db)]
+    session: Annotated[AsyncSession, Depends(get_session)] # Changed Session to AsyncSession, get_db to get_session
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -32,20 +33,20 @@ def get_current_user(
         # If sub is not a valid UUID string
         raise credentials_exception
 
-    user = session.get(User, user_id) # SQLModel synchronous session.get
+    user = await session.get(User, user_id) # SQLModel asynchronous session.get with await
 
     if user is None:
         raise credentials_exception
     return user
 
-def get_current_active_user(
+async def get_current_active_user( # Made async
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     return current_user
 
-def get_current_active_superuser(
+async def get_current_active_superuser( # Made async
     current_user: Annotated[User, Depends(get_current_active_user)]
 ) -> User:
     if not current_user.is_superuser:

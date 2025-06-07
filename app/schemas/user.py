@@ -1,17 +1,29 @@
-from pydantic import BaseModel, EmailStr
+import uuid
+from typing import List, Optional, TYPE_CHECKING
+from pydantic import BaseModel, EmailStr # Use Pydantic's BaseModel for pure schemas
 
-class UserBase(BaseModel):
+if TYPE_CHECKING:
+    from .role import RoleRead # Forward reference for RoleRead
+
+class UserBase(BaseModel): # Changed from SQLModel to Pydantic's BaseModel
+    username: str
     email: EmailStr
+    is_active: Optional[bool] = True
+    is_superuser: Optional[bool] = False
 
 class UserCreate(UserBase):
     password: str
 
-class User(UserBase):
-    id: int
-    is_active: bool
-    items: list["Item"] = [] # Forward declaration for circular dependency
+class UserRead(UserBase):
+    id: uuid.UUID
+    roles: Optional[List['RoleRead']] = [] # Add relationship, default to empty list
 
     class Config:
-        orm_mode = True
+        from_attributes = True # Pydantic V1 style, or from_attributes = True for V2
 
-from .item import Item # Import Item here to resolve forward declaration
+class UserUpdate(BaseModel): # Changed from SQLModel
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    password: Optional[str] = None
