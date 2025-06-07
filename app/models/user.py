@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING, List, Optional
 from sqlmodel import Field, Relationship, SQLModel
 import uuid
+from datetime import datetime # Ensure datetime is imported
 
 if TYPE_CHECKING:
-    from .associations import UserRole # Keep this for the User model relationship
-    # from app.schemas.role import RoleRead # No, models should not import schemas
+    from .associations import UserRole
 
 class User(SQLModel, table=True): # User model itself
     id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -12,6 +12,19 @@ class User(SQLModel, table=True): # User model itself
     email: str = Field(unique=True, index=True)
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
+
+    # Fields for advanced user management
+    is_email_verified: bool = Field(default=False, nullable=False)
+    email_verification_token: Optional[str] = Field(default=None, index=True, unique=True, nullable=True, max_length=255)
+    email_verification_token_expires_at: Optional[datetime] = Field(default=None, nullable=True)
+
+    password_reset_token: Optional[str] = Field(default=None, index=True, unique=True, nullable=True, max_length=255)
+    password_reset_token_expires_at: Optional[datetime] = Field(default=None, nullable=True)
+
+    failed_login_attempts: int = Field(default=0, nullable=False)
+    is_locked_out: bool = Field(default=False, nullable=False)
+    lockout_until: Optional[datetime] = Field(default=None, nullable=True)
+
     hashed_password: str
 
     roles: List["UserRole"] = Relationship(back_populates="user")

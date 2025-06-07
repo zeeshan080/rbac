@@ -10,9 +10,13 @@ from app.models.associations import UserRole
 from app.schemas.user import UserCreate, UserUpdate, UserRead
 from app.schemas.common import Page
 from app.core.security import get_password_hash
+from app.core.logging_config import get_logger # Added
+
+logger = get_logger(__name__) # Added
 
 class UserService:
     async def create_user(self, user_in: UserCreate, session: AsyncSession) -> User:
+        logger.info(f"Attempting to create user: {user_in.username}") # Added
         hashed_password = get_password_hash(user_in.password)
         # For SQLModel, direct instantiation is common and preferred
         db_user = User(
@@ -25,6 +29,7 @@ class UserService:
         session.add(db_user)
         await session.commit()
         await session.refresh(db_user)
+        logger.info(f"User {db_user.username} created successfully with ID: {db_user.id}") # Added
         return db_user
 
     async def get_user(self, user_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
@@ -62,6 +67,7 @@ class UserService:
     ) -> Optional[User]:
         db_user = await session.get(User, user_id)
         if not db_user:
+            logger.warning(f"Update user failed: User with ID {user_id} not found.") # Added
             return None
 
         update_data = user_in.model_dump(exclude_unset=True) # Pydantic V2

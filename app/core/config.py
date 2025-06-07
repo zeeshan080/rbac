@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ALGORITHM: str = "HS256"
 
+    # Logging configuration
+    LOG_LEVEL: str = "INFO"  # Default log level, can be overridden by .env
+
+    # Email verification settings
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24 # Default to 24 hours
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra='ignore')
 
 settings = Settings()

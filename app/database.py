@@ -1,5 +1,6 @@
-from sqlmodel.ext.asyncio.session import AsyncSession, create_async_engine # Use SQLModel's async components
-from sqlalchemy.orm import sessionmaker # Keep sessionmaker for AsyncSession configuration
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession # Changed import
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel # Needed for SQLModel specific session features if any, or just for type hinting
 
 from app.core.config import settings
 
@@ -10,14 +11,31 @@ from app.core.config import settings
 # postgresql://user:password@project-id.region.neon.tech/dbname?sslmode=require
 # asyncpg can often handle the "postgresql://" scheme directly.
 
-async_engine = create_async_engine(str(settings.DATABASE_URL), echo=True, future=True)
+from sqlalchemy.engine import make_url # Added for robust URL parsing
+
+db_url_str = str(settings.DATABASE_URL)
+url_object = make_url(db_url_str) # Parse the URL string
+connect_args = {}
+
+# Handle SSL for asyncpg if 'sslmode=require' is in the DSN
+if url_object.query.get("sslmode") == "require":
+    # Create a new query dictionary without 'sslmode'
+    new_query = {k: v for k, v in url_object.query.items() if k != "sslmode"}
+    # Reconstruct the URL object with the new query parameters
+    url_object = url_object.set(query=new_query)
+    connect_args["ssl"] = True # Use asyncpg's 'ssl' parameter
+
+# Use the modified URL object (SQLAlchemy will convert it to string internally)
+async_engine = create_async_engine(url_object, echo=True, future=True, connect_args=connect_args)
 
 # The AsyncSession for SQLModel should be configured like this:
+# Note: Using SQLAlchemy's AsyncSession directly now.
+# SQLModel's AsyncSession is a subclass, so this should be largely compatible.
 AsyncSessionLocal = sessionmaker(
     bind=async_engine, class_=AsyncSession, expire_on_commit=False
-) # Corrected: use 'bind=' for engine
+)
 
-async def get_session() -> AsyncSession: # Changed from get_db
+async def get_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
 
