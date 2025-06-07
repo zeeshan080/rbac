@@ -2,5 +2,6 @@ from . import login
 from . import users
 from . import roles
 from . import permissions
-
-# Can also define an all_routers list here if main.py imports it
+from . import department_router
+from . import designation_router
+from . import employee_router # Added
