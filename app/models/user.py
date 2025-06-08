@@ -5,7 +5,7 @@ from datetime import datetime # Ensure datetime is imported
 
 if TYPE_CHECKING:
     from .associations import UserRole
-    from .hr_models import Employee # Added import for Employee
+    from .hr_models import Employee, LeaveRequest # Added LeaveRequest
 
 class User(SQLModel, table=True): # User model itself
     id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -32,3 +32,6 @@ class User(SQLModel, table=True): # User model itself
 
     # Link to HR Employee profile if this user is an employee
     employee_profile: Optional["Employee"] = Relationship(back_populates="user")
+
+    # Link to leave requests reviewed by this user
+    reviewed_leave_requests: List["LeaveRequest"] = Relationship(back_populates="reviewed_by_user")
