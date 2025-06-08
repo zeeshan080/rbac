@@ -1,20 +1,20 @@
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Set # Ensured Set is here
+from typing import List, Optional, Set
 
-from sqlmodel import select, func
-from app.core.config import settings
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select, func # select and func are still used from SQLModel for query building
+from sqlalchemy.ext.asyncio import AsyncSession # Explicitly using SQLAlchemy's AsyncSession
 
 from app.models.user import User
 from app.models.role import Role
-from app.models.permission import Permission # Ensured Permission
-from app.models.associations import UserRole, RolePermission # Ensured RolePermission
+from app.models.permission import Permission
+from app.models.associations import UserRole, RolePermission
 from app.schemas.user import UserCreate, UserUpdate, UserRead
 from app.schemas.common import Page
 from app.core.security import get_password_hash
 from app.core.logging_config import get_logger
+from app.core.config import settings # Ensure settings is imported
 
 logger = get_logger(__name__)
 
@@ -36,36 +36,52 @@ class UserService:
         return db_user
 
     async def get_user(self, user_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
-        return await session.get(User, user_id)
+        logger.debug(f"Fetching user by ID: {user_id}")
+        user = await session.get(User, user_id)
+        if not user:
+            logger.debug(f"User with ID {user_id} not found.")
+        return user
 
     async def get_user_by_username(self, username: str, session: AsyncSession) -> Optional[User]:
+        logger.debug(f"Fetching user by username: {username}")
         statement = select(User).where(User.username == username)
-        result = await session.exec(statement)
-        return result.first()
+        result_proxy = await session.execute(statement)
+        user = result_proxy.scalars().first()
+        if not user:
+            logger.debug(f"User with username '{username}' not found.")
+        return user
 
     async def get_user_by_email(self, email: str, session: AsyncSession) -> Optional[User]:
+        logger.debug(f"Fetching user by email: {email}")
         statement = select(User).where(User.email == email)
-        result = await session.exec(statement)
-        return result.first()
+        result_proxy = await session.execute(statement)
+        user = result_proxy.scalars().first()
+        if not user:
+            logger.debug(f"User with email '{email}' not found.")
+        return user
 
     async def get_users(
         self, skip: int, limit: int, session: AsyncSession
     ) -> Page[UserRead]:
+        logger.debug(f"Fetching users: skip={skip}, limit={limit}")
+
         statement = select(User).offset(skip).limit(limit)
-        count_statement = select(func.count()).select_from(User)
+        count_statement = select(func.count(User.id)).select_from(User) # Explicit count
 
-        results = await session.exec(statement)
-        users = results.all()
+        users_result_proxy = await session.execute(statement)
+        users = users_result_proxy.scalars().all()
 
-        total_count_result = await session.exec(count_statement)
-        total = total_count_result.scalar_one()
+        total_count_result_proxy = await session.execute(count_statement)
+        total = total_count_result_proxy.scalar_one_or_none() or 0
 
         users_read = [UserRead.from_attributes(user) for user in users]
+        logger.debug(f"Found {len(users_read)} users for current page, total {total}.")
         return Page[UserRead](items=users_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 
     async def update_user(
         self, user_id: uuid.UUID, user_in: UserUpdate, session: AsyncSession
     ) -> Optional[User]:
+        logger.info(f"Updating user ID: {user_id}")
         db_user = await session.get(User, user_id)
         if not db_user:
             logger.warning(f"Update user failed: User with ID {user_id} not found.")
@@ -82,46 +98,63 @@ class UserService:
         session.add(db_user)
         await session.commit()
         await session.refresh(db_user)
+        logger.info(f"User '{db_user.username}' (ID: {db_user.id}) updated.")
         return db_user
 
     async def delete_user(self, user_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
+        logger.info(f"Deleting user ID: {user_id}")
         db_user = await session.get(User, user_id)
         if not db_user:
+            logger.warning(f"Delete failed: User with ID {user_id} not found.")
             return None
         await session.delete(db_user)
         await session.commit()
+        logger.info(f"User '{db_user.username}' (ID: {db_user.id}) deleted.")
         return db_user
 
     async def assign_role_to_user(self, user_id: uuid.UUID, role_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
+        logger.info(f"Assigning role {role_id} to user {user_id}")
         user = await session.get(User, user_id)
         role = await session.get(Role, role_id)
-        if not user or not role:
+
+        if not user:
+            logger.warning(f"Cannot assign role: User {user_id} not found.")
+            return None
+        if not role:
+            logger.warning(f"Cannot assign role: Role {role_id} not found.")
             return None
 
         existing_link_stmt = select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
-        existing_link_result = await session.exec(existing_link_stmt)
-        if existing_link_result.first():
-            await session.refresh(user)
+        existing_link_result_proxy = await session.execute(existing_link_stmt)
+        if existing_link_result_proxy.scalars().first():
+            logger.info(f"Role {role_id} already assigned to user {user_id}. Refreshing user.")
+            # await session.refresh(user) # Refresh might not be needed if just confirming link
             return user
 
         user_role_link = UserRole(user_id=user_id, role_id=role_id)
         session.add(user_role_link)
         await session.commit()
         await session.refresh(user)
+        logger.info(f"Role {role_id} successfully assigned to user {user_id}.")
         return user
 
     async def revoke_role_from_user(self, user_id: uuid.UUID, role_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
+        logger.info(f"Revoking role {role_id} from user {user_id}")
         user = await session.get(User, user_id)
         if not user:
+            logger.warning(f"Cannot revoke role: User {user_id} not found.")
             return None
 
         statement = select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
-        result = await session.exec(statement)
-        user_role_link = result.first()
+        result_proxy = await session.execute(statement)
+        user_role_link = result_proxy.scalars().first()
 
         if user_role_link:
             await session.delete(user_role_link)
             await session.commit()
+            logger.info(f"Role {role_id} successfully revoked from user {user_id}.")
+        else:
+            logger.info(f"Role {role_id} was not assigned to user {user_id}, no action taken.")
 
         await session.refresh(user)
         return user
@@ -162,8 +195,8 @@ class UserService:
     async def verify_email(self, token: str, session: AsyncSession) -> Optional[User]:
         logger.info(f"Attempting to verify email with token (prefix): {token[:10]}...")
         statement = select(User).where(User.email_verification_token == token)
-        result = await session.exec(statement)
-        user_db = result.first()
+        result_proxy = await session.execute(statement)
+        user_db = result_proxy.scalars().first()
 
         if not user_db:
             logger.warning(f"Email verification failed: Invalid token (prefix {token[:10]}...).")
@@ -228,8 +261,8 @@ class UserService:
     async def reset_password_with_token(self, token: str, new_password: str, session: AsyncSession) -> bool:
         logger.info(f"Attempting to reset password with token (prefix): {token[:10]}...")
         statement = select(User).where(User.password_reset_token == token)
-        result = await session.exec(statement)
-        user = result.first()
+        result_proxy = await session.execute(statement)
+        user = result_proxy.scalars().first()
 
         if not user:
             logger.warning(f"Password reset failed: Invalid token (prefix {token[:10]}...).")
@@ -258,13 +291,7 @@ class UserService:
 
     # --- Permission Methods ---
     async def get_user_permission_names(self, user: User, session: AsyncSession) -> Set[str]:
-        """
-        Retrieves a set of all permission names for a given user through their roles.
-        """
         logger.debug(f"Fetching permission names for user: {user.username} (ID: {user.id})")
-
-        # Efficiently fetch all permission names associated with the user's roles
-        # Query: User -> UserRole -> Role -> RolePermission -> Permission
         stmt = (
             select(Permission.name)
             .join(RolePermission, Permission.id == RolePermission.permission_id)
@@ -274,8 +301,8 @@ class UserService:
             .distinct()
         )
 
-        permission_results = await session.exec(stmt)
-        permission_names: Set[str] = set(permission_results.all())
+        permission_results_proxy = await session.execute(stmt)
+        permission_names: Set[str] = set(permission_results_proxy.scalars().all())
 
         logger.debug(f"Permissions for {user.username}: {permission_names}")
         return permission_names

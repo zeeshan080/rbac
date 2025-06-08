@@ -1,13 +1,10 @@
 # app/core/initial_data_config.py
 
 # --- Default Superuser Configuration ---
-# Password for the default superuser will be taken from DEFAULT_SUPERUSER_PASSWORD environment variable
 DEFAULT_SUPERUSER_EMAIL = "admin@example.com"
 DEFAULT_SUPERUSER_USERNAME = "admin"
 
 # --- Permissions Configuration ---
-# List of dictionaries: {"name": "permission:name", "description": "Description of permission"}
-
 PERMISSIONS_ADMIN = [
     {"name": "admin:access", "description": "Grants access to administrative sections/dashboards."},
     {"name": "user:create", "description": "Allows creating new users."},
@@ -46,21 +43,19 @@ PERMISSIONS_HR = [
     {"name": "employee:update", "description": "Allows updating employee records."},
     {"name": "employee:delete", "description": "Allows deleting employee records."},
 
-    # Future HR permissions could be added here, e.g.:
-    # {"name": "salary:read", "description": "Allows reading employee salary information."},
-    # {"name": "salary:update", "description": "Allows updating employee salary information."},
-    # {"name": "leave_request:create", "description": "Allows creating leave requests."},
-    # {"name": "leave_request:approve", "description": "Allows approving/rejecting leave requests."},
-    # {"name": "attendance:record", "description": "Allows recording employee attendance."},
-    # {"name": "report:hr:generate", "description": "Allows generating HR reports."},
+    # New Leave Request Permissions
+    {"name": "leave_request:create_own", "description": "Allows an employee (linked user) to create their own leave requests."},
+    {"name": "leave_request:create_for_others", "description": "Allows HR personnel to create leave requests for any employee."},
+    {"name": "leave_request:read_own", "description": "Allows an employee (linked user) to read their own leave requests."},
+    {"name": "leave_request:read_all", "description": "Allows authorized personnel (HR) to read all leave requests."},
+    {"name": "leave_request:update_status", "description": "Allows authorized personnel (HR Manager) to approve, reject, or cancel leave requests."},
+    {"name": "leave_request:cancel_own", "description": "Allows an employee (linked user) to cancel their own PENDING leave requests."},
 ]
 
 ALL_PERMISSIONS = PERMISSIONS_ADMIN + PERMISSIONS_HR
 
 
 # --- Roles Configuration ---
-# List of dictionaries: {"name": "Role Name", "description": "Description", "permissions": ["permission:name1", "permission:name2"]}
-
 ROLES_CONFIG = [
     {
         "name": "System Administrator",
@@ -75,8 +70,14 @@ ROLES_CONFIG = [
             "department:create", "department:read", "department:update", "department:delete",
             "designation:create", "designation:read", "designation:update", "designation:delete",
             "employee:create", "employee:read", "employee:update", "employee:delete",
-            # Also give HR Manager user management permissions for HR users if needed, e.g.
-            # "user:create", "user:read", "user:update" (scoped to HR users if possible)
+            # Leave Request permissions for HR Manager
+            "leave_request:create_for_others",
+            "leave_request:read_all",
+            "leave_request:update_status",
+            # Assuming HR Manager is also a user who might take leave
+            "leave_request:create_own",
+            "leave_request:read_own",
+            "leave_request:cancel_own",
         ]
     },
     {
@@ -86,16 +87,25 @@ ROLES_CONFIG = [
             "hr:module:access",
             "department:read",
             "designation:read",
-            "employee:create", # As per previous test setup
+            "employee:create",
             "employee:read",
+            # Leave Request permissions for HR Assistant
+            "leave_request:read_all",
+            # "leave_request:create_for_others", # Optional, as per script
+            # Assuming HR Assistant is also a user who might take leave
+            "leave_request:create_own",
+            "leave_request:read_own",
+            "leave_request:cancel_own",
         ]
     },
     {
         "name": "Basic User",
-        "description": "Default role for standard users with no special privileges.",
+        "description": "Default role for standard users (e.g., employees who are system users).",
         "permissions": [
-            # Example: "profile:read_self", "profile:update_self"
-            # For now, no specific app permissions beyond being an authenticated user.
+            # Permissions for employees to manage their own leave requests
+            "leave_request:create_own",
+            "leave_request:read_own",
+            "leave_request:cancel_own",
         ]
     }
 ]
