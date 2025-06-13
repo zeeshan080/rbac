@@ -35,7 +35,7 @@ async def create_employee(
         )
     # EmployeeRead schema expects department and designation to be populated.
     # Service's create_employee now returns the employee with relationships loaded via self.get_employee.
-    return EmployeeRead.from_attributes(db_employee)
+    return EmployeeRead.model_validate(db_employee)
 
 @router.get(
     "/",
@@ -43,12 +43,12 @@ async def create_employee(
     dependencies=[Depends(require_permission("employee:read"))]
 )
 async def read_employees(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[EmployeeService, service_dep],
     skip: int = 0,
     limit: int = Query(default=10, ge=1, le=100),
     department_id: Optional[uuid.UUID] = Query(default=None, description="Filter by Department ID"),
     designation_id: Optional[uuid.UUID] = Query(default=None, description="Filter by Designation ID"),
-    session: Annotated[AsyncSession, Depends(get_session)],
-    service: Annotated[EmployeeService, service_dep],
 ):
     logger.info(f"User requesting to fetch employees (paginated). Filters: dept_id={department_id}, desig_id={designation_id}")
     # The service's get_employees method already handles populating relationships for EmployeeRead.
@@ -76,7 +76,7 @@ async def read_employee_by_id(
         logger.warning(f"Employee with ID {employee_id} not found when requested by user.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
     # Service's get_employee method ensures relationships (dept, desig) are loaded.
-    return EmployeeRead.from_attributes(employee)
+    return EmployeeRead.model_validate(employee)
 
 @router.put(
     "/{employee_id}",
@@ -100,7 +100,7 @@ async def update_employee(
             detail="Employee not found or update failed due to invalid data (e.g., non-existent department/designation/user or user_id already linked)."
         )
     # Service's update_employee now returns the employee with relationships loaded.
-    return EmployeeRead.from_attributes(updated_employee)
+    return EmployeeRead.model_validate(updated_employee)
 
 @router.delete(
     "/{employee_id}",

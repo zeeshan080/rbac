@@ -24,15 +24,15 @@ async def create_role_endpoint(
     if existing_role:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role name already exists")
     role = await service.create_role(role_in=role_in, session=session)
-    return RoleRead.from_attributes(role)
+    return RoleRead.model_validate(role)
 
 @router.get("/", response_model=Page[RoleRead])
 async def read_roles_endpoint(
-    skip: int = 0,
-    limit: int = Query(default=10, ge=1, le=100),
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[RoleService, service_dependency],
     current_user: Annotated[User, Depends(get_current_active_user)],
+    skip: int = 0,
+    limit: int = Query(default=10, ge=1, le=100),
 ):
     return await service.get_roles(skip=skip, limit=limit, session=session)
 
@@ -46,7 +46,7 @@ async def read_role_by_id_endpoint(
     role = await service.get_role(role_id=role_id, session=session)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    return RoleRead.from_attributes(role)
+    return RoleRead.model_validate(role)
 
 @router.put("/{role_id}", response_model=RoleRead)
 async def update_role_endpoint(
@@ -59,7 +59,7 @@ async def update_role_endpoint(
     updated_role = await service.update_role(role_id=role_id, role_in=role_in, session=session)
     if not updated_role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    return RoleRead.from_attributes(updated_role)
+    return RoleRead.model_validate(updated_role)
 
 @router.delete("/{role_id}", response_model=RoleRead)
 async def delete_role_endpoint(
@@ -71,7 +71,7 @@ async def delete_role_endpoint(
     deleted_role = await service.delete_role(role_id=role_id, session=session)
     if not deleted_role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    return RoleRead.from_attributes(deleted_role)
+    return RoleRead.model_validate(deleted_role)
 
 @router.post("/{role_id}/permissions/{permission_id}", response_model=RoleRead)
 async def assign_permission_to_role_endpoint(
@@ -86,7 +86,7 @@ async def assign_permission_to_role_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role or Permission not found")
     # Similar to UserRead.roles, RoleRead.permissions may not be immediately populated in the response
     # without specific handling for loading/refreshing the 'permissions' relationship.
-    return RoleRead.from_attributes(role)
+    return RoleRead.model_validate(role)
 
 @router.delete("/{role_id}/permissions/{permission_id}", response_model=RoleRead)
 async def revoke_permission_from_role_endpoint(
@@ -99,4 +99,4 @@ async def revoke_permission_from_role_endpoint(
     role = await service.revoke_permission_from_role(role_id=role_id, permission_id=permission_id, session=session)
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found or permission not assigned")
-    return RoleRead.from_attributes(role)
+    return RoleRead.model_validate(role)

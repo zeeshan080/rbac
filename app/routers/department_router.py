@@ -36,7 +36,7 @@ async def create_department(
         # For simple name uniqueness, DB constraint is best.
         logger.error(f"Department creation failed for name: {department_in.name}. Service returned None.")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Department with name '{department_in.name}' might already exist or other creation error.")
-    return DepartmentRead.from_attributes(db_department)
+    return DepartmentRead.model_validate(db_department)
 
 @router.get(
     "/",
@@ -44,10 +44,10 @@ async def create_department(
     dependencies=[Depends(require_permission("department:read"))]
 )
 async def read_departments(
-    skip: int = 0,
-    limit: int = Query(default=10, ge=1, le=100),
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[DepartmentService, service_dep],
+    skip: int = 0,
+    limit: int = Query(default=10, ge=1, le=100),
 ):
     logger.info("User requesting to fetch all departments (paginated).")
     return await service.get_departments(skip=skip, limit=limit, session=session)
@@ -67,7 +67,7 @@ async def read_department_by_id(
     if not department:
         logger.warning(f"Department with ID {department_id} not found when requested by user.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
-    return DepartmentRead.from_attributes(department)
+    return DepartmentRead.model_validate(department)
 
 @router.put(
     "/{department_id}",
@@ -87,7 +87,7 @@ async def update_department(
     if not updated_department:
         logger.warning(f"Update failed by user request: Department with ID {department_id} not found or update error.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found or update failed due to validation error (e.g., name conflict).")
-    return DepartmentRead.from_attributes(updated_department)
+    return DepartmentRead.model_validate(updated_department)
 
 @router.delete(
     "/{department_id}",

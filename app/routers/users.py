@@ -6,7 +6,7 @@ from pydantic import EmailStr, BaseModel # EmailStr, BaseModel are used by Email
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.database import get_session
 from app.services.user_service import UserService
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import UserCreate, UserRead, UserUpdate, UserCreateWithRoles
 from app.schemas.common import Page
 from app.schemas.auth import PasswordResetRequestSchema, NewPasswordSchema # Added for password reset
 from app.models.user import User # For current_user type hint
@@ -37,25 +37,58 @@ async def create_user_endpoint(
     #     await service.request_email_verification(user.email, session)
     # except Exception as e: # Catch broad exceptions if email sending is non-critical for user creation
     #     logger.error(f"Failed to send verification email for user {user.username} during creation: {e}")
-    return UserRead.from_attributes(user)
+    return UserRead.model_validate(user)
+
+@router.post("/with-roles", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def create_user_with_roles_endpoint(
+    user_in: UserCreateWithRoles,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[UserService, service_dependency],
+):
+    existing_user = await service.get_user_by_username(user_in.username, session)
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
+    existing_email = await service.get_user_by_email(user_in.email, session)
+    if existing_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+    # Use the function you created
+    user = await service.create_user_with_roles(
+        user_in=UserCreate(
+            username=user_in.username,
+            email=user_in.email,
+            password=user_in.password,
+            is_active=user_in.is_active,
+            is_superuser=user_in.is_superuser,
+        ),
+        role_ids=user_in.role_ids,
+        session=session,
+    )
+    return UserRead.model_validate(user)
 
 
 @router.get("/me", response_model=UserRead)
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[UserService, Depends(UserService)],
 ):
-    return UserRead.from_attributes(current_user)
+    user_with_roles = await service.get_user_with_roles(current_user.id, session)
+    return UserRead.model_validate(user_with_roles)
 
 
 @router.get("/", response_model=Page[UserRead])
 async def read_users(
-    skip: int = 0,
-    limit: int = Query(default=10, ge=1, le=100),
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[UserService, service_dependency],
     current_user: Annotated[User, Depends(get_current_active_superuser)],
+    skip: int = 0,
+    limit: int = Query(default=10, ge=1, le=100),
+    order_by: str = Query(default="id", description="Field to order by, e.g., 'username', 'email', 'created_at'"),
+    order_desc: bool = Query(default=False, description="Order direction, true for descending, false for ascending"),
+    search: str = Query(default=None, description="Search term for username or email"),
 ):
-    return await service.get_users(skip=skip, limit=limit, session=session)
+    return await service.get_users(skip=skip, limit=limit, session=session, order_by=order_by, order_desc=order_desc, search=search)
 
 
 @router.get("/{user_id}", response_model=UserRead)
@@ -68,7 +101,7 @@ async def read_user_by_id(
     user = await service.get_user(user_id=user_id, session=session)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserRead.from_attributes(user)
+    return UserRead.model_validate(user)
 
 
 @router.put("/{user_id}", response_model=UserRead)
@@ -114,7 +147,7 @@ async def update_user_endpoint(
             await service.request_email_verification(updated_user.email, session)
             await session.refresh(updated_user) # Refresh to get latest state for the response
 
-    return UserRead.from_attributes(updated_user)
+    return UserRead.model_validate(updated_user)
 
 
 @router.delete("/{user_id}", response_model=UserRead) # Or return status 204
@@ -127,7 +160,7 @@ async def delete_user_endpoint(
     deleted_user = await service.delete_user(user_id=user_id, session=session)
     if not deleted_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserRead.from_attributes(deleted_user)
+    return UserRead.model_validate(deleted_user)
 
 
 @router.post("/{user_id}/roles/{role_id}", response_model=UserRead)
@@ -141,7 +174,7 @@ async def assign_role_to_user_endpoint(
     user = await service.assign_role_to_user(user_id=user_id, role_id=role_id, session=session)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or Role not found")
-    return UserRead.from_attributes(user)
+    return UserRead.model_validate(user)
 
 
 @router.delete("/{user_id}/roles/{role_id}", response_model=UserRead)
@@ -155,7 +188,7 @@ async def revoke_role_from_user_endpoint(
     user = await service.revoke_role_from_user(user_id=user_id, role_id=role_id, session=session)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found or role not assigned")
-    return UserRead.from_attributes(user)
+    return UserRead.model_validate(user)
 
 # --- Email Verification Endpoints ---
 
@@ -184,7 +217,7 @@ async def verify_email_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid, expired, or already used verification token.",
         )
-    return UserRead.from_attributes(user)
+    return UserRead.model_validate(user)
 
 # --- Password Reset Endpoints ---
 

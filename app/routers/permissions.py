@@ -24,15 +24,15 @@ async def create_permission_endpoint(
     if existing_perm:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Permission name already exists")
     permission = await service.create_permission(permission_in=permission_in, session=session)
-    return PermissionRead.from_attributes(permission)
+    return PermissionRead.model_validate(permission)
 
 @router.get("/", response_model=Page[PermissionRead])
 async def read_permissions_endpoint(
-    skip: int = 0,
-    limit: int = Query(default=10, ge=1, le=100),
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[PermissionService, service_dependency],
     current_user: Annotated[User, Depends(get_current_active_user)],
+    skip: int = 0,
+    limit: int = Query(default=10, ge=1, le=100),
 ):
     return await service.get_permissions(skip=skip, limit=limit, session=session)
 
@@ -46,7 +46,7 @@ async def read_permission_by_id_endpoint(
     permission = await service.get_permission(permission_id=permission_id, session=session)
     if not permission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-    return PermissionRead.from_attributes(permission)
+    return PermissionRead.model_validate(permission)
 
 @router.put("/{permission_id}", response_model=PermissionRead)
 async def update_permission_endpoint(
@@ -59,7 +59,7 @@ async def update_permission_endpoint(
     updated_perm = await service.update_permission(permission_id=permission_id, permission_in=permission_in, session=session)
     if not updated_perm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-    return PermissionRead.from_attributes(updated_perm)
+    return PermissionRead.model_validate(updated_perm)
 
 @router.delete("/{permission_id}", response_model=PermissionRead)
 async def delete_permission_endpoint(
@@ -71,4 +71,4 @@ async def delete_permission_endpoint(
     deleted_perm = await service.delete_permission(permission_id=permission_id, session=session)
     if not deleted_perm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-    return PermissionRead.from_attributes(deleted_perm)
+    return PermissionRead.model_validate(deleted_perm)

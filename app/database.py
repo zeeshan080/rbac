@@ -26,7 +26,7 @@ if url_object.query.get("sslmode") == "require":
     connect_args["ssl"] = True # Use asyncpg's 'ssl' parameter
 
 # Use the modified URL object (SQLAlchemy will convert it to string internally)
-async_engine = create_async_engine(url_object, echo=True, future=True, connect_args=connect_args)
+async_engine = create_async_engine(url_object, echo=True, future=True, connect_args=connect_args, pool_pre_ping=True)
 
 # The AsyncSession for SQLModel should be configured like this:
 # Note: Using SQLAlchemy's AsyncSession directly now.

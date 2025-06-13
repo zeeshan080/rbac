@@ -16,8 +16,7 @@ class DepartmentCreate(DepartmentBase):
 
 class DepartmentRead(DepartmentBase):
     id: uuid.UUID
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=100)
@@ -33,8 +32,7 @@ class DesignationCreate(DesignationBase):
 
 class DesignationRead(DesignationBase):
     id: uuid.UUID
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class DesignationUpdate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=100)
@@ -46,8 +44,7 @@ class EmployeeReadMinimal(BaseModel): # For embedding in LeaveRequestRead
     first_name: str
     last_name: str
     email: EmailStr # Make sure EmailStr is available if used here
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class EmployeeBase(BaseModel):
     first_name: str = Field(..., max_length=50)
@@ -68,8 +65,7 @@ class EmployeeRead(EmployeeBase):
     department: Optional[DepartmentRead] = None
     designation: Optional[DesignationRead] = None
     # user: Optional[UserReadMinimal] = None # Can be added if needed, ensure UserReadMinimal is defined/imported
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = Field(default=None, max_length=50)
@@ -106,8 +102,7 @@ class LeaveRequestRead(LeaveRequestBase):
     reviewed_at: Optional[datetime] = None
     reviewed_by_user: Optional[UserReadMinimal] = None # Nested minimal reviewer info
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class LeaveRequestStatusUpdate(BaseModel): # For HR/Manager to approve/reject
     status: str # Should validate against allowed statuses e.g. "approved", "rejected", "cancelled"

@@ -10,5 +10,4 @@ class Page(BaseModel, Generic[T]):
     size: Optional[int] = None
     # pages: Optional[int] = None # Derived: ceil(total / size)
 
-    class Config:
-        from_attributes = True # For nested Pydantic models if T is also a Pydantic model from ORM
+    model_config = {"from_attributes": True} # For nested Pydantic models if T is also a Pydantic model from ORM

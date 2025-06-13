@@ -11,13 +11,13 @@ class UserRole(SQLModel, table=True):
     user_id: uuid.UUID = Field(default=None, primary_key=True, foreign_key="user.id") # Use UUID
     role_id: uuid.UUID = Field(default=None, primary_key=True, foreign_key="role.id") # Use UUID
 
-    user: Optional["User"] = Relationship(back_populates="roles")
-    role: Optional["Role"] = Relationship(back_populates="users")
+    user: Optional["User"] = Relationship(back_populates="user_roles")
+    role: Optional["Role"] = Relationship(back_populates="role_users")
 
 
 class RolePermission(SQLModel, table=True):
     role_id: uuid.UUID = Field(default=None, primary_key=True, foreign_key="role.id") # Use UUID
     permission_id: uuid.UUID = Field(default=None, primary_key=True, foreign_key="permission.id") # Use UUID
 
-    role: Optional["Role"] = Relationship(back_populates="permissions")
-    permission: Optional["Permission"] = Relationship(back_populates="roles")
+    role: Optional["Role"] = Relationship(back_populates="role_permissions")
+    permission: Optional["Permission"] = Relationship(back_populates="role_permissions")

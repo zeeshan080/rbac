@@ -3,8 +3,9 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Set
 
-from sqlmodel import select, func # select and func are still used from SQLModel for query building
-from sqlalchemy.ext.asyncio import AsyncSession # Explicitly using SQLAlchemy's AsyncSession
+from sqlmodel import select, func,or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.role import Role
@@ -14,7 +15,7 @@ from app.schemas.user import UserCreate, UserUpdate, UserRead
 from app.schemas.common import Page
 from app.core.security import get_password_hash
 from app.core.logging_config import get_logger
-from app.core.config import settings # Ensure settings is imported
+from app.core.config import settings
 
 logger = get_logger(__name__)
 
@@ -31,20 +32,70 @@ class UserService:
         )
         session.add(db_user)
         await session.commit()
-        await session.refresh(db_user)
+        # Fetch with roles eagerly loaded
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == db_user.id)
+        result = await session.execute(statement)
+        db_user = result.scalars().first()
         logger.info(f"User {db_user.username} created successfully with ID: {db_user.id}")
         return db_user
 
+    
+    async def create_user_with_roles(
+        self,
+        user_in: UserCreate,
+        role_ids: list[uuid.UUID],
+        session: AsyncSession
+    ) -> Optional[User]:
+        """
+        Create a user and assign the given roles.
+        """
+        logger.info(f"Creating user {user_in.username} with roles: {role_ids}")
+        hashed_password = get_password_hash(user_in.password)
+        db_user = User(
+            username=user_in.username,
+            email=user_in.email,
+            hashed_password=hashed_password,
+            is_active=user_in.is_active if user_in.is_active is not None else True,
+            is_superuser=user_in.is_superuser if user_in.is_superuser is not None else False,
+        )
+        session.add(db_user)
+        await session.commit()
+
+        # Assign roles
+        for role_id in role_ids:
+            role = await session.get(Role, role_id)
+            if role:
+                user_role_link = UserRole(user_id=db_user.id, role_id=role_id)
+                session.add(user_role_link)
+        await session.commit()
+
+        # Fetch with roles eagerly loaded
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == db_user.id)
+        result = await session.execute(statement)
+        db_user = result.scalars().first()
+        logger.info(f"User {db_user.username} created with roles assigned.")
+        return db_user
+    
+    async def get_user_with_roles(self, user_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
+        """
+        Fetch a user by ID with roles eagerly loaded.
+        """
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == user_id)
+        result = await session.execute(statement)
+        return result.scalars().first()
+
     async def get_user(self, user_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
         logger.debug(f"Fetching user by ID: {user_id}")
-        user = await session.get(User, user_id)
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == user_id)
+        result = await session.execute(statement)
+        user = result.scalars().first()
         if not user:
             logger.debug(f"User with ID {user_id} not found.")
         return user
 
     async def get_user_by_username(self, username: str, session: AsyncSession) -> Optional[User]:
         logger.debug(f"Fetching user by username: {username}")
-        statement = select(User).where(User.username == username)
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.username == username)
         result_proxy = await session.execute(statement)
         user = result_proxy.scalars().first()
         if not user:
@@ -53,28 +104,62 @@ class UserService:
 
     async def get_user_by_email(self, email: str, session: AsyncSession) -> Optional[User]:
         logger.debug(f"Fetching user by email: {email}")
-        statement = select(User).where(User.email == email)
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.email == email)
         result_proxy = await session.execute(statement)
         user = result_proxy.scalars().first()
         if not user:
             logger.debug(f"User with email '{email}' not found.")
         return user
 
+    
+    
     async def get_users(
-        self, skip: int, limit: int, session: AsyncSession
+        self,
+        skip: int,
+        limit: int,
+        session: AsyncSession,
+        order_by: str = "id",
+        order_desc: bool = False,
+        search: Optional[str] = None,
     ) -> Page[UserRead]:
-        logger.debug(f"Fetching users: skip={skip}, limit={limit}")
-
-        statement = select(User).offset(skip).limit(limit)
-        count_statement = select(func.count(User.id)).select_from(User) # Explicit count
-
-        users_result_proxy = await session.execute(statement)
+        logger.debug(f"Fetching users: skip={skip}, limit={limit}, order_by={order_by}, order_desc={order_desc}, search={search}")
+    
+        stmt = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
+    
+        # Search by username or email if search term is provided
+        if search:
+            stmt = stmt.where(
+                or_(
+                    User.username.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%")
+                )
+            )
+    
+        # Order by the specified column
+        order_column = getattr(User, order_by, User.id)
+        if order_desc:
+            order_column = order_column.desc()
+        stmt = stmt.order_by(order_column)
+    
+        stmt = stmt.offset(skip).limit(limit)
+        count_stmt = select(func.count(User.id)).select_from(User)
+        if search:
+            count_stmt = count_stmt.where(
+                or_(
+                    User.username.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%")
+                )
+            )
+    
+        users_result_proxy = await session.execute(stmt)
         users = users_result_proxy.scalars().all()
-
-        total_count_result_proxy = await session.execute(count_statement)
+    
+        total_count_result_proxy = await session.execute(count_stmt)
         total = total_count_result_proxy.scalar_one_or_none() or 0
-
-        users_read = [UserRead.from_attributes(user) for user in users]
+    
+        users_read = [UserRead.model_validate(user) for user in users]
         logger.debug(f"Found {len(users_read)} users for current page, total {total}.")
         return Page[UserRead](items=users_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 
@@ -97,7 +182,10 @@ class UserService:
 
         session.add(db_user)
         await session.commit()
-        await session.refresh(db_user)
+        # Fetch with roles eagerly loaded
+        statement = select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == db_user.id)
+        result = await session.execute(statement)
+        db_user = result.scalars().first()
         logger.info(f"User '{db_user.username}' (ID: {db_user.id}) updated.")
         return db_user
 
@@ -107,6 +195,13 @@ class UserService:
         if not db_user:
             logger.warning(f"Delete failed: User with ID {user_id} not found.")
             return None
+    
+        # Delete all UserRole associations for this user
+        await session.execute(
+            UserRole.__table__.delete().where(UserRole.user_id == user_id)
+        )
+        await session.commit()
+    
         await session.delete(db_user)
         await session.commit()
         logger.info(f"User '{db_user.username}' (ID: {db_user.id}) deleted.")
@@ -116,47 +211,60 @@ class UserService:
         logger.info(f"Assigning role {role_id} to user {user_id}")
         user = await session.get(User, user_id)
         role = await session.get(Role, role_id)
-
+    
         if not user:
             logger.warning(f"Cannot assign role: User {user_id} not found.")
             return None
         if not role:
             logger.warning(f"Cannot assign role: Role {role_id} not found.")
             return None
-
+    
         existing_link_stmt = select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
         existing_link_result_proxy = await session.execute(existing_link_stmt)
         if existing_link_result_proxy.scalars().first():
             logger.info(f"Role {role_id} already assigned to user {user_id}. Refreshing user.")
-            # await session.refresh(user) # Refresh might not be needed if just confirming link
-            return user
-
-        user_role_link = UserRole(user_id=user_id, role_id=role_id)
-        session.add(user_role_link)
-        await session.commit()
-        await session.refresh(user)
+        else:
+            user_role_link = UserRole(user_id=user_id, role_id=role_id)
+            session.add(user_role_link)
+            await session.commit()
+    
+        # Fetch with roles and their permissions eagerly loaded
+        statement = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        ).where(User.id == user_id)
+        result = await session.execute(statement)
+        user = result.scalars().first()
         logger.info(f"Role {role_id} successfully assigned to user {user_id}.")
         return user
-
+    
     async def revoke_role_from_user(self, user_id: uuid.UUID, role_id: uuid.UUID, session: AsyncSession) -> Optional[User]:
         logger.info(f"Revoking role {role_id} from user {user_id}")
         user = await session.get(User, user_id)
         if not user:
             logger.warning(f"Cannot revoke role: User {user_id} not found.")
             return None
-
-        statement = select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
+    
+        # Find the UserRole association
+        statement = select(UserRole).where(
+            UserRole.user_id == user_id,
+            UserRole.role_id == role_id
+        )
         result_proxy = await session.execute(statement)
         user_role_link = result_proxy.scalars().first()
-
+    
         if user_role_link:
             await session.delete(user_role_link)
             await session.commit()
             logger.info(f"Role {role_id} successfully revoked from user {user_id}.")
         else:
             logger.info(f"Role {role_id} was not assigned to user {user_id}, no action taken.")
-
-        await session.refresh(user)
+    
+        # Fetch user with roles and permissions eagerly loaded
+        statement = select(User).options(
+            selectinload(User.roles).selectinload(Role.permissions)
+        ).where(User.id == user_id)
+        result = await session.execute(statement)
+        user = result.scalars().first()
         return user
 
     # --- Email Verification Methods ---

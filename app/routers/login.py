@@ -83,4 +83,4 @@ async def login_for_access_token(
 
 @router.get("/test-token", response_model=UserRead)
 async def test_token(current_user: Annotated[User, Depends(get_current_active_user)]):
-    return UserRead.from_attributes(current_user)
+    return UserRead.model_validate(current_user)

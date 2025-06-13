@@ -10,6 +10,7 @@ from app.models.permission import Permission
 from app.schemas.permission import PermissionCreate, PermissionUpdate, PermissionRead
 from app.schemas.common import Page
 from app.core.logging_config import get_logger
+from app.models.associations import RolePermission
 
 logger = get_logger(__name__)
 
@@ -51,7 +52,7 @@ class PermissionService:
         total_count_result_proxy = await session.execute(count_statement) # Changed
         total = total_count_result_proxy.scalar_one_or_none() or 0 # scalar_one_or_none() is safer for count if table could be empty
 
-        permissions_read = [PermissionRead.from_attributes(perm) for perm in permissions]
+        permissions_read = [PermissionRead.model_validate(perm) for perm in permissions]
         logger.debug(f"Found {len(permissions_read)} permissions for current page, total {total}.")
         return Page[PermissionRead](items=permissions_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 
@@ -74,22 +75,24 @@ class PermissionService:
         logger.info(f"Permission '{db_permission.name}' (ID: {db_permission.id}) updated.")
         return db_permission
 
+ 
+    
     async def delete_permission(self, permission_id: uuid.UUID, session: AsyncSession) -> Optional[Permission]:
         logger.info(f"Deleting permission ID: {permission_id}")
         db_permission = await session.get(Permission, permission_id)
         if not db_permission:
             logger.warning(f"Delete failed: Permission with ID {permission_id} not found.")
             return None
-
-        # Consider checking if permission is assigned to any roles before deletion
-        # from app.models.associations import RolePermission
-        # check_stmt = select(func.count(RolePermission.role_id)).where(RolePermission.permission_id == permission_id)
-        # count_proxy = await session.execute(check_stmt) # Changed to execute
-        # if count_proxy.scalar_one() > 0: # Changed to scalar_one
-        #     logger.error(f"Deletion failed: Permission {permission_id} is assigned to one or more roles.")
-        #     return None
-
+    
+        # Delete all RolePermission associations for this permission
+        await session.execute(
+            RolePermission.__table__.delete().where(RolePermission.permission_id == permission_id)
+        )
+        await session.commit()
+    
         await session.delete(db_permission)
         await session.commit()
         logger.info(f"Permission '{db_permission.name}' (ID: {db_permission.id}) deleted.")
         return db_permission
+    
+

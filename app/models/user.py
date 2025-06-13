@@ -4,8 +4,11 @@ import uuid
 from datetime import datetime # Ensure datetime is imported
 
 if TYPE_CHECKING:
+    from .role import Role  # Import Role model for type checking
     from .associations import UserRole
     from .hr_models import Employee, LeaveRequest # Added LeaveRequest
+
+from .associations import UserRole  # Import UserRole for the many-to-many relationship
 
 class User(SQLModel, table=True): # User model itself
     id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
@@ -28,10 +31,14 @@ class User(SQLModel, table=True): # User model itself
 
     hashed_password: str
 
-    roles: List["UserRole"] = Relationship(back_populates="user")
-
     # Link to HR Employee profile if this user is an employee
     employee_profile: Optional["Employee"] = Relationship(back_populates="user")
 
     # Link to leave requests reviewed by this user
     reviewed_leave_requests: List["LeaveRequest"] = Relationship(back_populates="reviewed_by_user")
+
+    roles: List["Role"] = Relationship(
+        back_populates="users",
+        link_model=UserRole
+    )
+    user_roles: List["UserRole"] = Relationship(back_populates="user")  # Optional, for direct access to UserRole

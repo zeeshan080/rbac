@@ -2,7 +2,14 @@ import uuid
 from typing import List, Optional, TYPE_CHECKING
 from pydantic import BaseModel, EmailStr # Ensure EmailStr is imported
 
+from pydantic import BaseModel, EmailStr
+from typing import List
+import uuid
+
 if TYPE_CHECKING:
+    from .role import RoleRead
+else:
+    # Import RoleRead at runtime for model_rebuild
     from .role import RoleRead
 
 class UserBase(BaseModel):
@@ -19,8 +26,9 @@ class UserRead(UserBase):
     is_email_verified: bool = False
     roles: Optional[List['RoleRead']] = []
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+UserRead.model_rebuild()
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -34,5 +42,13 @@ class UserReadMinimal(BaseModel): # For embedding in other schemas
     username: str
     email: EmailStr # Added email as it's usually important for identification
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+
+class UserCreateWithRoles(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    is_active: bool = True
+    is_superuser: bool = False
+    role_ids: List[uuid.UUID]

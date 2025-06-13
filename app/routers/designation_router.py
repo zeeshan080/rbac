@@ -31,7 +31,7 @@ async def create_designation(
     if not db_designation:
         logger.error(f"Designation creation failed for title: {designation_in.title}. Service returned None.")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Designation with title '{designation_in.title}' might already exist or other creation error.")
-    return DesignationRead.from_attributes(db_designation)
+    return DesignationRead.model_validate(db_designation)
 
 @router.get(
     "/",
@@ -39,10 +39,10 @@ async def create_designation(
     dependencies=[Depends(require_permission("designation:read"))]
 )
 async def read_designations(
-    skip: int = 0,
-    limit: int = Query(default=10, ge=1, le=100),
     session: Annotated[AsyncSession, Depends(get_session)],
     service: Annotated[DesignationService, service_dep],
+    skip: int = 0,
+    limit: int = Query(default=10, ge=1, le=100),
 ):
     logger.info("User requesting to fetch all designations (paginated).")
     return await service.get_designations(skip=skip, limit=limit, session=session)
@@ -62,7 +62,7 @@ async def read_designation_by_id(
     if not designation:
         logger.warning(f"Designation with ID {designation_id} not found when requested by user.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Designation not found")
-    return DesignationRead.from_attributes(designation)
+    return DesignationRead.model_validate(designation)
 
 @router.put(
     "/{designation_id}",
@@ -82,7 +82,7 @@ async def update_designation(
     if not updated_designation:
         logger.warning(f"Update failed by user request: Designation with ID {designation_id} not found or update error.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Designation not found or update failed due to validation error (e.g., title conflict).")
-    return DesignationRead.from_attributes(updated_designation)
+    return DesignationRead.model_validate(updated_designation)
 
 @router.delete(
     "/{designation_id}",

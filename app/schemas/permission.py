@@ -12,8 +12,7 @@ class PermissionCreate(PermissionBase):
 class PermissionRead(PermissionBase):
     id: uuid.UUID
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class PermissionUpdate(BaseModel): # Changed from SQLModel
     name: Optional[str] = None

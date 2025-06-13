@@ -54,7 +54,7 @@ class DepartmentService:
         total_count_result_proxy = await session.execute(count_statement)
         total = total_count_result_proxy.scalar_one_or_none() or 0
 
-        departments_read = [DepartmentRead.from_attributes(dept) for dept in departments]
+        departments_read = [DepartmentRead.model_validate(dept) for dept in departments]
         logger.debug(f"Found {len(departments_read)} departments for current page, total {total}.")
         return Page[DepartmentRead](items=departments_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 

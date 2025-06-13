@@ -64,7 +64,7 @@ class DesignationService:
         total_count_result_proxy = await session.execute(count_statement)
         total = total_count_result_proxy.scalar_one_or_none() or 0
 
-        designations_read = [DesignationRead.from_attributes(desig) for desig in designations]
+        designations_read = [DesignationRead.model_validate(desig) for desig in designations]
         logger.debug(f"Found {len(designations_read)} designations for current page, total {total}.")
         return Page[DesignationRead](items=designations_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 

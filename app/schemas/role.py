@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .permission import PermissionRead # Forward reference
+else:
+    from .permission import PermissionRead
 
 class RoleBase(BaseModel): # Changed from SQLModel
     name: str
@@ -16,8 +18,8 @@ class RoleRead(RoleBase):
     id: uuid.UUID
     permissions: Optional[List['PermissionRead']] = [] # Add relationship, default to empty list
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
 
 class RoleUpdate(BaseModel): # Changed from SQLModel
     name: Optional[str] = None

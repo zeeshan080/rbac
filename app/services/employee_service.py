@@ -93,7 +93,7 @@ class EmployeeService:
         total_count_result_proxy = await session.execute(count_statement)
         total = total_count_result_proxy.scalar_one_or_none() or 0
 
-        employees_read = [EmployeeRead.from_attributes(emp) for emp in employees]
+        employees_read = [EmployeeRead.model_validate(emp) for emp in employees]
         logger.debug(f"Found {len(employees_read)} employees for current page, total {total}.")
         return Page[EmployeeRead](items=employees_read, total=total, page=(skip // limit) + 1 if limit > 0 else 1, size=limit)
 
