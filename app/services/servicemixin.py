@@ -20,12 +20,7 @@ class CRUDMixin(Generic[T]):
     # Create operations
     async def create(self, obj_in: T, session: AsyncSession, user_id: Optional[uuid.UUID] = None) -> T:
         """Create a new record."""
-        await self._before_create(obj_in, session, user_id)
-        
-        if hasattr(obj_in, "created_by") and user_id is not None:
-            obj_in.created_by = user_id
-        if hasattr(obj_in, "updated_by") and user_id is not None:
-            obj_in.updated_by = user_id
+        obj_in = await self._before_create(obj_in, session, user_id)
             
         session.add(obj_in)
         await session.commit()
@@ -51,6 +46,16 @@ class CRUDMixin(Generic[T]):
             await self._after_create(obj, session, user_id)
             
         return objs_in
+    
+    #check if user is superuser
+    async def is_superuser(self, user_id: uuid.UUID, session: AsyncSession) -> bool:
+        """Check if a user is a superuser."""
+        statement = select(self.model).where(
+            getattr(self.model, "id") == user_id,
+            getattr(self.model, "is_superuser") == True
+        )
+        result = await session.execute(statement)
+        return result.scalars().first() is not None
     
     # Read operations
     async def get(self, id: ID, session: AsyncSession) -> Optional[T]:
@@ -140,11 +145,6 @@ class CRUDMixin(Generic[T]):
         
         for key, value in obj_in.items():
             setattr(db_obj, key, value)
-            
-        if hasattr(db_obj, "updated_at"):
-            db_obj.updated_at = datetime.now(timezone.utc)
-        if hasattr(db_obj, "updated_by") and user_id is not None:
-            db_obj.updated_by = user_id
             
         session.add(db_obj)
         await session.commit()

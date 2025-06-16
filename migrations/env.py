@@ -12,6 +12,9 @@ from sqlmodel import SQLModel # For target_metadata
 
 # Import your models here so Alembic can see them for autogenerate
 # Make sure app.models eventually imports all your models
+# Ensure the project root is in sys.path so 'app' can be imported
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from app.models.user import User
 from app.models.role import Role
 from app.models.permission import Permission

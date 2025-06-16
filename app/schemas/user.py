@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List
 import uuid
 
+
 if TYPE_CHECKING:
     from .role import RoleRead
 else:
@@ -20,6 +21,9 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+
+class UserUpdate(UserBase):
+    pass
 
 class UserRead(UserBase):
     id: uuid.UUID
